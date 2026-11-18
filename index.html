@@ -1,0 +1,787 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dynamic Canteen Management System</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background: #f1f5f9;
+            color: #172033;
+        }
+
+        header {
+            background: #172554;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        nav {
+            background: #1e40af;
+            padding: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 4px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        nav button {
+            background: #334e9b;
+        }
+
+        button:hover {
+            opacity: 0.85;
+        }
+
+        main {
+            max-width: 1100px;
+            margin: auto;
+            padding: 20px;
+        }
+
+        .card, .panel {
+            background: white;
+            padding: 18px;
+            margin: 12px 0;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px #0001;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+        }
+
+        .number {
+            font-size: 25px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        input, select {
+            padding: 10px;
+            margin: 5px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+
+        th, td {
+            border-bottom: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+
+        th {
+            background: #dbeafe;
+        }
+
+        .danger {
+            background: #dc2626;
+        }
+
+        .low {
+            color: red;
+            font-weight: bold;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .login {
+            max-width: 350px;
+            margin: 100px auto;
+            padding: 25px;
+            background: white;
+            border-radius: 10px;
+        }
+
+        .login input {
+            width: 90%;
+        }
+
+        .scroll {
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+
+<!-- LOGIN PAGE -->
+<div id="login" class="login">
+    <h2>🍽️ KAG Canteen Manager</h2>
+    <p>Login to continue</p>
+
+    <input id="username" placeholder="Username" value="admin">
+    <input id="password" type="password"
+           placeholder="Password" value="admin123">
+
+    <button onclick="login()">Login</button>
+    <p id="error" class="low"></p>
+
+    <small>Demo: admin / admin123</small>
+</div>
+
+<!-- MAIN WEBSITE -->
+<div id="website" class="hidden">
+
+<header>
+    <h1>KAG Canteen Management System</h1>
+    <p>Dynamic Canteen Sales & Inventory Management</p>
+    <button onclick="logout()">Logout</button>
+</header>
+
+<nav>
+    <button onclick="showDashboard()">Dashboard</button>
+    <button onclick="showInventory()">Inventory</button>
+    <button onclick="showSales()">Sales & Billing</button>
+    <button onclick="showPurchases()">Purchases</button>
+    <button onclick="showSuppliers()">Suppliers</button>
+    <button onclick="showReports()">Reports</button>
+</nav>
+
+<main id="content"></main>
+
+</div>
+
+<script>
+
+// DATABASE USING LOCAL STORAGE
+
+let db = JSON.parse(localStorage.getItem("canteenDB")) || {
+    products: [
+        {id: 1, name: "Veg Meals", category: "Meals",
+         price: 80, stock: 30, min: 5},
+
+        {id: 2, name: "Tea", category: "Drinks",
+         price: 15, stock: 50, min: 10},
+
+        {id: 3, name: "Samosa", category: "Snacks",
+         price: 20, stock: 25, min: 5}
+    ],
+    sales: [],
+    purchases: [],
+    suppliers: []
+};
+
+let cart = [];
+
+function saveData() {
+    localStorage.setItem("canteenDB", JSON.stringify(db));
+}
+
+function money(value) {
+    return "₹" + Number(value).toFixed(2);
+}
+
+function safe(value) {
+    return String(value).replace(/[&<>"']/g, function(c) {
+        return {
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;"
+        }[c];
+    });
+}
+
+// LOGIN
+
+function login() {
+    let u = document.getElementById("username").value;
+    let p = document.getElementById("password").value;
+
+    if ((u === "admin" && p === "admin123") ||
+        (u === "staff" && p === "staff123")) {
+
+        document.getElementById("login").classList.add("hidden");
+        document.getElementById("website").classList.remove("hidden");
+
+        showDashboard();
+
+    } else {
+        document.getElementById("error").innerText =
+            "Invalid username or password";
+    }
+}
+
+function logout() {
+    document.getElementById("website").classList.add("hidden");
+    document.getElementById("login").classList.remove("hidden");
+}
+
+// DASHBOARD
+
+function showDashboard() {
+
+    let revenue = db.sales.reduce(
+        (sum, sale) => sum + sale.total, 0
+    );
+
+    let lowStock = db.products.filter(
+        p => p.stock <= p.min
+    );
+
+    document.getElementById("content").innerHTML = `
+        <h2>Dashboard</h2>
+
+        <div class="cards">
+            <div class="card">
+                Total Products
+                <div class="number">${db.products.length}</div>
+            </div>
+
+            <div class="card">
+                Total Stock
+                <div class="number">
+                    ${db.products.reduce((s,p)=>s+p.stock,0)}
+                </div>
+            </div>
+
+            <div class="card">
+                Total Sales
+                <div class="number">${money(revenue)}</div>
+            </div>
+
+            <div class="card">
+                Low Stock Items
+                <div class="number">${lowStock.length}</div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>Low Stock Alerts</h3>
+            ${
+                lowStock.map(p =>
+                    `<p class="low">${safe(p.name)} - ${p.stock} remaining</p>`
+                ).join("") || "All products have sufficient stock."
+            }
+        </div>
+
+        <div class="panel">
+            <h3>Recent Sales</h3>
+            ${salesTable(db.sales.slice(-5).reverse())}
+        </div>
+    `;
+}
+
+// INVENTORY
+
+function showInventory() {
+
+    document.getElementById("content").innerHTML = `
+        <h2>Inventory Management</h2>
+
+        <div class="panel">
+            <h3>Add Product</h3>
+
+            <input id="pname" placeholder="Product Name">
+            <input id="pcat" placeholder="Category">
+            <input id="price" type="number" placeholder="Price">
+            <input id="stock" type="number" placeholder="Stock">
+            <input id="minimum" type="number" placeholder="Minimum Stock" value="5">
+
+            <button onclick="addProduct()">Save Product</button>
+            <p id="pmsg"></p>
+        </div>
+
+        <div class="panel">
+            <h3>Product List</h3>
+            <input id="search" placeholder="Search product"
+                   oninput="drawProducts()">
+
+            <div id="productTable" class="scroll"></div>
+        </div>
+    `;
+
+    drawProducts();
+}
+
+function addProduct() {
+
+    let name = document.getElementById("pname").value.trim();
+    let category = document.getElementById("pcat").value.trim();
+    let price = Number(document.getElementById("price").value);
+    let stock = Number(document.getElementById("stock").value);
+    let min = Number(document.getElementById("minimum").value);
+
+    if (!name || !category ||
+        document.getElementById("price").value === "" ||
+        document.getElementById("stock").value === "" ||
+        price < 0 || stock < 0 || min < 0) {
+
+        document.getElementById("pmsg").innerText =
+            "Please enter valid product details.";
+        return;
+    }
+
+    db.products.push({
+        id: Date.now(),
+        name: name,
+        category: category,
+        price: price,
+        stock: stock,
+        min: min
+    });
+
+    saveData();
+    showInventory();
+}
+
+function drawProducts() {
+
+    let search = document.getElementById("search").value.toLowerCase();
+
+    let products = db.products.filter(p =>
+        p.name.toLowerCase().includes(search)
+    );
+
+    document.getElementById("productTable").innerHTML = `
+        <table>
+            <tr>
+                <th>Name</th>
+                <th>Category</th>
+                <th>Price</th>
+                <th>Stock</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+
+            ${products.map(p => `
+                <tr>
+                    <td>${safe(p.name)}</td>
+                    <td>${safe(p.category)}</td>
+                    <td>${money(p.price)}</td>
+                    <td>${p.stock}</td>
+                    <td>
+                        ${p.stock <= p.min
+                            ? '<span class="low">Low Stock</span>'
+                            : 'Available'}
+                    </td>
+                    <td>
+                        <button class="danger"
+                        onclick="deleteProduct(${p.id})">
+                        Delete</button>
+                    </td>
+                </tr>
+            `).join("")}
+        </table>
+    `;
+}
+
+function deleteProduct(id) {
+
+    if (confirm("Delete this product?")) {
+        db.products = db.products.filter(p => p.id !== id);
+        saveData();
+        showInventory();
+    }
+}
+
+// SALES AND BILLING
+
+function showSales() {
+
+    document.getElementById("content").innerHTML = `
+        <h2>Sales & Billing</h2>
+
+        <div class="panel">
+            <h3>Create Bill</h3>
+
+            <select id="saleProduct">
+                ${db.products.map(p => `
+                    <option value="${p.id}">
+                        ${safe(p.name)} - ${money(p.price)}
+                        (Stock: ${p.stock})
+                    </option>
+                `).join("")}
+            </select>
+
+            <input id="quantity" type="number" value="1" min="1">
+
+            <button onclick="addToCart()">Add Item</button>
+
+            <div id="cart"></div>
+
+            <h3 id="total">Total: ₹0.00</h3>
+
+            <button onclick="completeSale()">Complete Sale</button>
+            <button class="danger" onclick="clearCart()">Clear Bill</button>
+
+            <p id="saleMsg"></p>
+        </div>
+
+        <div class="panel">
+            <h3>Sales History</h3>
+            ${salesTable([...db.sales].reverse())}
+        </div>
+    `;
+
+    cart = [];
+    drawCart();
+}
+
+function addToCart() {
+
+    let id = Number(document.getElementById("saleProduct").value);
+    let qty = Number(document.getElementById("quantity").value);
+
+    let product = db.products.find(p => p.id === id);
+    let existing = cart.find(c => c.id === id);
+
+    if (!product || !Number.isInteger(qty) || qty < 1 ||
+        qty + (existing ? existing.qty : 0) > product.stock) {
+
+        document.getElementById("saleMsg").innerText =
+            "Invalid quantity or insufficient stock.";
+        return;
+    }
+
+    if (existing) {
+        existing.qty += qty;
+    } else {
+        cart.push({
+            id: product.id,
+            name: product.name,
+            price: product.price,
+            qty: qty
+        });
+    }
+
+    document.getElementById("saleMsg").innerText = "";
+    drawCart();
+}
+
+function drawCart() {
+
+    let total = cart.reduce(
+        (sum, item) => sum + item.price * item.qty, 0
+    );
+
+    document.getElementById("cart").innerHTML = `
+        <table>
+            <tr>
+                <th>Product</th>
+                <th>Quantity</th>
+                <th>Amount</th>
+            </tr>
+
+            ${cart.map(item => `
+                <tr>
+                    <td>${safe(item.name)}</td>
+                    <td>${item.qty}</td>
+                    <td>${money(item.price * item.qty)}</td>
+                </tr>
+            `).join("")}
+        </table>
+    `;
+
+    document.getElementById("total").innerText =
+        "Total: " + money(total);
+}
+
+function clearCart() {
+    cart = [];
+    drawCart();
+}
+
+function completeSale() {
+
+    if (cart.length === 0) {
+        alert("Please add products first.");
+        return;
+    }
+
+    for (let item of cart) {
+        let p = db.products.find(x => x.id === item.id);
+
+        if (!p || p.stock < item.qty) {
+            alert("Insufficient stock.");
+            return;
+        }
+    }
+
+    cart.forEach(item => {
+        let p = db.products.find(x => x.id === item.id);
+        p.stock -= item.qty;
+    });
+
+    let total = cart.reduce(
+        (sum, item) => sum + item.price * item.qty, 0
+    );
+
+    db.sales.push({
+        date: new Date().toLocaleDateString(),
+        items: [...cart],
+        total: total
+    });
+
+    saveData();
+
+    alert("Sale completed successfully!");
+
+    showSales();
+}
+
+function salesTable(rows) {
+
+    return `
+        <div class="scroll">
+        <table>
+            <tr>
+                <th>Date</th>
+                <th>Products</th>
+                <th>Total</th>
+            </tr>
+
+            ${rows.map(s => `
+                <tr>
+                    <td>${s.date}</td>
+                    <td>
+                        ${s.items.map(i =>
+                            safe(i.name) + " x " + i.qty
+                        ).join(", ")}
+                    </td>
+                    <td>${money(s.total)}</td>
+                </tr>
+            `).join("")}
+        </table>
+        </div>
+    `;
+}
+
+// PURCHASES
+
+function showPurchases() {
+
+    document.getElementById("content").innerHTML = `
+        <h2>Purchase Management</h2>
+
+        <div class="panel">
+            <h3>Restock Product</h3>
+
+            <select id="buyProduct">
+                ${db.products.map(p => `
+                    <option value="${p.id}">${safe(p.name)}</option>
+                `).join("")}
+            </select>
+
+            <input id="buyQty" type="number" min="1"
+                   placeholder="Quantity">
+
+            <input id="supplierName" placeholder="Supplier Name">
+
+            <button onclick="addPurchase()">Save Purchase</button>
+        </div>
+
+        <div class="panel">
+            <h3>Purchase History</h3>
+
+            <table>
+                <tr>
+                    <th>Date</th>
+                    <th>Product</th>
+                    <th>Quantity</th>
+                    <th>Supplier</th>
+                </tr>
+
+                ${db.purchases.map(p => `
+                    <tr>
+                        <td>${p.date}</td>
+                        <td>${safe(p.product)}</td>
+                        <td>${p.qty}</td>
+                        <td>${safe(p.supplier)}</td>
+                    </tr>
+                `).join("")}
+            </table>
+        </div>
+    `;
+}
+
+function addPurchase() {
+
+    let id = Number(document.getElementById("buyProduct").value);
+    let qty = Number(document.getElementById("buyQty").value);
+    let supplier = document.getElementById("supplierName").value.trim();
+
+    let product = db.products.find(p => p.id === id);
+
+    if (!product || !Number.isInteger(qty) || qty < 1 || !supplier) {
+        alert("Enter valid purchase details.");
+        return;
+    }
+
+    product.stock += qty;
+
+    db.purchases.push({
+        date: new Date().toLocaleDateString(),
+        product: product.name,
+        qty: qty,
+        supplier: supplier
+    });
+
+    saveData();
+    showPurchases();
+}
+
+// SUPPLIERS
+
+function showSuppliers() {
+
+    document.getElementById("content").innerHTML = `
+        <h2>Supplier Management</h2>
+
+        <div class="panel">
+            <input id="supplier" placeholder="Supplier Name">
+            <input id="phone" placeholder="Phone Number">
+            <input id="email" placeholder="Email">
+
+            <button onclick="addSupplier()">Add Supplier</button>
+        </div>
+
+        <div class="panel">
+            <h3>Supplier List</h3>
+
+            <table>
+                <tr>
+                    <th>Name</th>
+                    <th>Phone</th>
+                    <th>Email</th>
+                </tr>
+
+                ${db.suppliers.map(s => `
+                    <tr>
+                        <td>${safe(s.name)}</td>
+                        <td>${safe(s.phone)}</td>
+                        <td>${safe(s.email)}</td>
+                    </tr>
+                `).join("")}
+            </table>
+        </div>
+    `;
+}
+
+function addSupplier() {
+
+    let name = document.getElementById("supplier").value.trim();
+    let phone = document.getElementById("phone").value.trim();
+    let email = document.getElementById("email").value.trim();
+
+    if (!name) {
+        alert("Enter supplier name.");
+        return;
+    }
+
+    db.suppliers.push({
+        name: name,
+        phone: phone,
+        email: email
+    });
+
+    saveData();
+    showSuppliers();
+}
+
+// REPORTS
+
+function showReports() {
+
+    let revenue = db.sales.reduce(
+        (sum, sale) => sum + sale.total, 0
+    );
+
+    document.getElementById("content").innerHTML = `
+        <h2>Reports</h2>
+
+        <div class="cards">
+            <div class="card">
+                Total Bills
+                <div class="number">${db.sales.length}</div>
+            </div>
+
+            <div class="card">
+                Total Revenue
+                <div class="number">${money(revenue)}</div>
+            </div>
+
+            <div class="card">
+                Total Purchases
+                <div class="number">${db.purchases.length}</div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>Stock Report</h3>
+
+            <table>
+                <tr>
+                    <th>Product</th>
+                    <th>Stock</th>
+                    <th>Minimum Stock</th>
+                </tr>
+
+                ${db.products.map(p => `
+                    <tr>
+                        <td>${safe(p.name)}</td>
+                        <td>${p.stock}</td>
+                        <td>${p.min}</td>
+                    </tr>
+                `).join("")}
+            </table>
+        </div>
+
+        <button onclick="exportCSV()">Download Inventory CSV</button>
+    `;
+}
+
+function exportCSV() {
+
+    let rows = [
+        ["Product", "Category", "Price", "Stock"],
+        ...db.products.map(p => [
+            p.name, p.category, p.price, p.stock
+        ])
+    ];
+
+    let csv = rows.map(row =>
+        row.map(value =>
+            '"' + String(value).replace(/"/g, '""') + '"'
+        ).join(",")
+    ).join("\n");
+
+    let file = new Blob([csv], {type: "text/csv"});
+    let link = document.createElement("a");
+
+    link.href = URL.createObjectURL(file);
+    link.download = "inventory_report.csv";
+    link.click();
+
+    URL.revokeObjectURL(link.href);
+}
+
+</script>
+</body>
+</html>
